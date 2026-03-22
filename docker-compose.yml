@@ -1,0 +1,21 @@
+# Exemple pour tester MySQL + API en local (adapter les mots de passe).
+# Démarrage : docker compose up -d db
+# Puis configurer server/.env (MYSQL_HOST=127.0.0.1 ou nom du service) et lancer l’API avec npm run dev.
+
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-trocspot_root}
+      MYSQL_DATABASE: trocspot
+      MYSQL_USER: trocspot
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-trocspot_secret}
+    ports:
+      - "3306:3306"
+    volumes:
+      - trocspot_mysql:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+volumes:
+  trocspot_mysql:
