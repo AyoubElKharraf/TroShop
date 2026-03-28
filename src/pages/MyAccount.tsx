@@ -3,7 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
-import type { Listing, Profile } from "@/types/domain";
+import type { ConversationRow, Listing, Profile } from "@/types/domain";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, Edit, Pencil, Bell } from "lucide-react";
+import { Trash2, Edit, Pencil, Bell, Heart, MessageCircle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import ListingCard from "@/components/ListingCard";
 import { usePageTitle } from "@/hooks/usePageTitle";
@@ -56,6 +56,18 @@ const MyAccount = () => {
     queryKey: ["me-preferences", user?.id],
     enabled: !!user,
     queryFn: async () => api<{ notify_messages: boolean }>("/api/me/preferences"),
+  });
+
+  const { data: favoriteListings } = useQuery({
+    queryKey: ["my-favorites", user?.id],
+    enabled: !!user,
+    queryFn: async () => api<Listing[]>("/api/me/favorites"),
+  });
+
+  const { data: recentConversations } = useQuery({
+    queryKey: ["conversations", user?.id],
+    enabled: !!user,
+    queryFn: async () => api<ConversationRow[]>("/api/conversations"),
   });
 
   const [notifyMessages, setNotifyMessages] = useState(true);
@@ -155,6 +167,7 @@ const MyAccount = () => {
       <Tabs defaultValue="profile">
         <TabsList className="flex flex-wrap gap-1">
           <TabsTrigger value="profile">{t("account.tabProfile")}</TabsTrigger>
+          <TabsTrigger value="activity">{t("account.tabActivity")}</TabsTrigger>
           <TabsTrigger value="preferences">{t("account.tabNotif")}</TabsTrigger>
           {user.role === "admin" && <TabsTrigger value="listings">{t("account.tabCatalog")}</TabsTrigger>}
         </TabsList>
@@ -236,6 +249,90 @@ const MyAccount = () => {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="activity">
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-heading flex items-center gap-2">
+                  <Heart className="h-5 w-5" />
+                  {t("account.activityFavorites")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {favoriteListings && favoriteListings.length > 0 ? (
+                  <ul className="space-y-2">
+                    {favoriteListings.slice(0, 5).map((l) => (
+                      <li key={l.id}>
+                        <Link
+                          to={`/annonces/${l.id}`}
+                          className="flex items-center gap-3 rounded-lg border bg-card/50 p-3 transition-colors hover:bg-muted"
+                        >
+                          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
+                            {l.images?.[0] ? (
+                              <img src={l.images[0]} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full items-center justify-center text-muted-foreground">
+                                <Heart className="h-5 w-5" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-medium">{l.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {l.price.toFixed(2)} € · {t(`listing.categories.${l.category}`, { defaultValue: l.category })}
+                            </p>
+                          </div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">{t("account.activityFavoritesEmpty")}</p>
+                )}
+                <Button variant="link" className="mt-2 h-auto px-0" asChild>
+                  <Link to="/favoris">{t("account.activitySeeAllFavorites")}</Link>
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-heading flex items-center gap-2">
+                  <MessageCircle className="h-5 w-5" />
+                  {t("account.activityMessages")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {recentConversations && recentConversations.length > 0 ? (
+                  <ul className="space-y-2">
+                    {recentConversations.slice(0, 5).map((c) => (
+                      <li key={c.id}>
+                        <Link
+                          to={`/messages/${c.id}`}
+                          className="block rounded-lg border bg-card/50 p-3 transition-colors hover:bg-muted"
+                        >
+                          <p className="truncate font-medium">
+                            {c.peer_display_name?.trim() || c.listings?.title || "—"}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">{c.listings?.title}</p>
+                          {c.last_message_preview && (
+                            <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{c.last_message_preview}</p>
+                          )}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">{t("account.activityMessagesEmpty")}</p>
+                )}
+                <Button variant="link" className="mt-2 h-auto px-0" asChild>
+                  <Link to="/messages">{t("account.activitySeeAllMessages")}</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="preferences">

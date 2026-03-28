@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
-import { api, getToken, setToken } from "@/lib/api";
+import { ApiError, api, getToken, setToken } from "@/lib/api";
 import type { AuthUser } from "@/types/domain";
 
 interface AuthContextType {
@@ -32,9 +32,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const data = await api<{ user: AuthUser }>("/api/auth/me");
       setUser(data.user);
-    } catch {
-      setToken(null);
-      setUser(null);
+    } catch (e) {
+      // Ne déconnecter que si le token est refusé — pas sur panne réseau / 5xx
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+        setToken(null);
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }

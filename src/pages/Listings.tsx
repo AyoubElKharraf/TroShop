@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
@@ -6,12 +6,17 @@ import type { ListingsPageResponse } from "@/types/domain";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { EmptyState } from "@/components/EmptyState";
+import { ListingCardSkeleton } from "@/components/ListingCardSkeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, ChevronLeft, ChevronRight, Inbox, PlusCircle, RotateCcw } from "lucide-react";
+import { ErrorStatePanel } from "@/components/ErrorStatePanel";
 import { useState, useEffect, useMemo } from "react";
 import ListingCard from "@/components/ListingCard";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAuth } from "@/contexts/AuthContext";
+import { motion } from "framer-motion";
 
 const PAGE_SIZE = 12;
 
@@ -19,25 +24,30 @@ const Listings = () => {
   const { t } = useTranslation();
   usePageTitle(t("titles.listings"));
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get("q") || "");
   const [category, setCategory] = useState(searchParams.get("categorie") || "all");
   const [listingType, setListingType] = useState(searchParams.get("type") || "all");
+  const [availableOnly, setAvailableOnly] = useState(searchParams.get("available") !== "0");
   const [sortBy, setSortBy] = useState("recent");
+  const [favoriteBusyId, setFavoriteBusyId] = useState<string | null>(null);
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
 
   useEffect(() => {
     setSearch(searchParams.get("q") || "");
     setCategory(searchParams.get("categorie") || "all");
+    setAvailableOnly(searchParams.get("available") !== "0");
   }, [searchParams]);
 
-  const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["listings", search, category, listingType, sortBy, page],
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
+    queryKey: ["listings", search, category, listingType, availableOnly, sortBy, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (category !== "all") params.set("category", category);
       if (listingType !== "all") params.set("listing_type", listingType);
+      params.set("available", availableOnly ? "1" : "0");
       params.set("sort", sortBy);
       params.set("page", String(page));
       params.set("pageSize", String(PAGE_SIZE));
@@ -46,6 +56,32 @@ const Listings = () => {
   });
 
   const listings = data?.items;
+  const { data: favoriteIds = [] } = useQuery({
+    queryKey: ["favorite-ids", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const res = await api<{ ids: string[] }>("/api/me/favorites/ids");
+      return res.ids || [];
+    },
+  });
+
+  const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+
+  const toggleFavorite = async (listingId: string) => {
+    if (!user) return;
+    setFavoriteBusyId(listingId);
+    try {
+      if (favoriteSet.has(listingId)) {
+        await api(`/api/listings/${listingId}/favorite`, { method: "DELETE" });
+      } else {
+        await api(`/api/listings/${listingId}/favorite`, { method: "POST" });
+      }
+      await queryClient.invalidateQueries({ queryKey: ["favorite-ids", user.id] });
+    } finally {
+      setFavoriteBusyId(null);
+    }
+  };
+
   const totalPages = data?.totalPages ?? 1;
   const total = data?.total ?? 0;
 
@@ -54,8 +90,9 @@ const Listings = () => {
       Boolean(search.trim()) ||
       category !== "all" ||
       listingType !== "all" ||
+      !availableOnly ||
       sortBy !== "recent",
-    [search, category, listingType, sortBy]
+    [search, category, listingType, availableOnly, sortBy]
   );
 
   const setPage = (p: number) => {
@@ -70,6 +107,7 @@ const Listings = () => {
     const params = new URLSearchParams();
     if (search) params.set("q", search);
     if (category !== "all") params.set("categorie", category);
+    if (!availableOnly) params.set("available", "0");
     setSearchParams(params);
   };
 
@@ -77,11 +115,13 @@ const Listings = () => {
     setSearch("");
     setCategory("all");
     setListingType("all");
+    setAvailableOnly(true);
     setSortBy("recent");
     setSearchParams(new URLSearchParams());
   };
 
   const showSkeleton = isLoading && !data;
+  const errorMessage = error instanceof Error ? error.message : String(error);
 
   const countLabel =
     total === 0
@@ -140,6 +180,17 @@ const Listings = () => {
             <SelectItem value="price_desc">{t("listings.sortPriceDesc")}</SelectItem>
           </SelectContent>
         </Select>
+        <div className="flex min-h-10 items-center gap-2 rounded-md border px-3 py-2">
+          <Switch
+            id="available-only"
+            checked={availableOnly}
+            onCheckedChange={setAvailableOnly}
+            aria-label={t("listings.availableOnly")}
+          />
+          <label htmlFor="available-only" className="text-sm text-muted-foreground">
+            {t("listings.availableOnly")}
+          </label>
+        </div>
         <div className="flex flex-wrap gap-2">
           <Button type="submit" className="font-heading font-semibold">
             {t("listings.apply")}
@@ -154,29 +205,42 @@ const Listings = () => {
       </form>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">{countLabel}</p>
-        {isFetching && !showSkeleton && (
+        <p className="text-sm text-muted-foreground">{isError ? "—" : countLabel}</p>
+        {isFetching && !showSkeleton && !isError && (
           <span className="text-xs text-muted-foreground">{t("listings.updating")}</span>
         )}
       </div>
 
-      {showSkeleton ? (
+      {isError ? (
+        <ErrorStatePanel
+          title={t("listings.loadError")}
+          description={errorMessage}
+          onRetry={() => void refetch()}
+          retryLabel={t("common.retry")}
+        />
+      ) : showSkeleton ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="overflow-hidden rounded-xl border bg-card">
-              <div className="aspect-square animate-pulse bg-muted" />
-              <div className="space-y-2 p-4">
-                <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
-                <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
-              </div>
-            </div>
+            <ListingCardSkeleton key={i} />
           ))}
         </div>
       ) : listings && listings.length > 0 ? (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {listings.map((listing) => (
-              <ListingCard key={listing.id} listing={listing} />
+            {listings.map((listing, idx) => (
+              <motion.div
+                key={listing.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.22, delay: Math.min(idx * 0.02, 0.14) }}
+              >
+                <ListingCard
+                  listing={listing}
+                  isFavorite={favoriteSet.has(listing.id)}
+                  onToggleFavorite={user ? async (l) => toggleFavorite(l.id) : undefined}
+                  favoriteLoading={favoriteBusyId === listing.id}
+                />
+              </motion.div>
             ))}
           </div>
           {totalPages > 1 && (
@@ -208,42 +272,34 @@ const Listings = () => {
           )}
         </>
       ) : (
-        <Card className="border-2 border-dashed border-muted-foreground/25 bg-muted/20">
-          <CardContent className="flex flex-col items-center gap-6 py-14 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-              <Inbox className="h-8 w-8" strokeWidth={1.5} />
-            </div>
-            <div className="max-w-md space-y-2">
-              <h2 className="font-heading text-xl font-semibold">
-                {hasActiveFilters ? t("listings.emptyTitleFiltered") : t("listings.emptyTitleDefault")}
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                {hasActiveFilters ? t("listings.emptyDescFiltered") : t("listings.emptyDescDefault")}
-              </p>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-              {user?.role === "admin" && (
-                <Button asChild className="gap-2 font-heading font-semibold">
-                  <Link to="/annonces/nouvelle">
-                    <PlusCircle className="h-4 w-4" />
-                    {t("listings.publish")}
-                  </Link>
-                </Button>
-              )}
-              {hasActiveFilters && (
-                <Button type="button" variant="outline" onClick={resetFilters} className="gap-2">
-                  <RotateCcw className="h-4 w-4" />
-                  {t("listings.showAll")}
-                </Button>
-              )}
-            </div>
-            {import.meta.env.DEV && !hasActiveFilters && (
-              <p className="max-w-lg text-xs leading-relaxed text-muted-foreground">
-                {t("listings.devHint")}
-              </p>
+        <>
+          <EmptyState
+            icon={Inbox}
+            title={hasActiveFilters ? t("listings.emptyTitleFiltered") : t("listings.emptyTitleDefault")}
+            description={hasActiveFilters ? t("listings.emptyDescFiltered") : t("listings.emptyDescDefault")}
+            showCatalogIllustration={!hasActiveFilters}
+          >
+            {user?.role === "admin" && (
+              <Button asChild className="gap-2 font-heading font-semibold">
+                <Link to="/annonces/nouvelle">
+                  <PlusCircle className="h-4 w-4" />
+                  {t("listings.publish")}
+                </Link>
+              </Button>
             )}
-          </CardContent>
-        </Card>
+            {hasActiveFilters && (
+              <Button type="button" variant="outline" onClick={resetFilters} className="gap-2">
+                <RotateCcw className="h-4 w-4" />
+                {t("listings.showAll")}
+              </Button>
+            )}
+          </EmptyState>
+          {import.meta.env.DEV && !hasActiveFilters && (
+            <p className="mx-auto mt-6 max-w-lg text-center text-xs leading-relaxed text-muted-foreground">
+              {t("listings.devHint")}
+            </p>
+          )}
+        </>
       )}
     </div>
   );

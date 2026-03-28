@@ -1,8 +1,13 @@
 {
+  "a11y": {
+    "skipToContent": "Skip to main content"
+  },
   "common": {
     "error": "Error",
     "loading": "Loading…",
-    "brand": "TrocSpot"
+    "brand": "TrocSpot",
+    "retry": "Retry",
+    "apiUnreachable": "Cannot reach the server. Make sure the API is running (npm run dev:all)."
   },
   "titles": {
     "home": "Home",
@@ -10,6 +15,8 @@
     "auth": "Sign in",
     "messages": "Messages",
     "account": "My account",
+    "favorites": "Favorites",
+    "seller": "Seller",
     "legal": "Legal notice",
     "privacy": "Privacy"
   },
@@ -17,17 +24,39 @@
     "browse": "Browse",
     "login": "Sign in",
     "publish": "Publish a listing",
+    "favorites": "Favorites",
     "messages": "Messages",
     "account": "My account",
     "logout": "Log out",
-    "language": "Language"
+    "language": "Language",
+    "menuOpen": "Open menu",
+    "menuClose": "Close menu"
   },
   "footer": {
     "listings": "Listings",
     "login": "Sign in",
     "legal": "Legal notice",
     "privacy": "Privacy",
-    "rights": "© {{year}} TrocSpot. All rights reserved."
+    "rights": "© {{year}} TrocSpot. All rights reserved.",
+    "navAria": "Footer links",
+    "trustSummary": "TrocSpot helps you browse the catalogue and chat with the shop in-app. Payment, pickup, and warranty details are agreed directly with the seller — use the same care as any peer-to-peer deal."
+  },
+  "trust": {
+    "eyebrow": "Trust & transparency",
+    "messaging": {
+      "title": "In-app messaging",
+      "desc": "Discuss your order inside the app without posting your email on listings."
+    },
+    "safety": {
+      "title": "Reporting",
+      "desc": "You can report inappropriate listings; reported content may be reviewed by the team."
+    },
+    "legal": {
+      "title": "Legal & data",
+      "desc": "Access legal notices and the privacy policy to understand how data is handled."
+    },
+    "disclaimer": "For details on personal data:",
+    "privacyLink": "privacy policy"
   },
   "home": {
     "heroTitle1": "Browse the catalogue",
@@ -38,8 +67,10 @@
     "categoriesTitle": "Categories",
     "recentTitle": "Recent listings",
     "seeAll": "See all",
-    "emptyCatalog": "No listings yet. The catalogue is published by the administrator.",
+    "emptyStateTitle": "No listings to show yet",
+    "emptyCatalog": "The catalogue is published by the administrator. Check back soon or browse categories.",
     "devHint": "Tip: to load sample listings with images (<code>public/sample-listings/</code>), run <code>npm run seed</code> in <code>server</code> (demo account demo@trocspot.local / demo12345), then refresh.",
+    "recentLoadError": "Recent listings could not be loaded.",
     "cat": {
       "vetements": "Clothing",
       "livres": "Books",
@@ -74,6 +105,7 @@
     "typeAll": "Sale & rent",
     "typeSale": "Sale",
     "typeRent": "Rent",
+    "availableOnly": "Available only",
     "sort": "Sort",
     "sortRecent": "Newest",
     "sortPriceAsc": "Price ascending",
@@ -92,7 +124,8 @@
     "emptyDescDefault": "The catalogue is managed by the administrator. Locally, load demo data or sign in as admin to publish.",
     "publish": "Publish a listing",
     "showAll": "Show all",
-    "devHint": "Development: to fill the list with sample images, run <code>npm run seed</code> in the <code>server</code> folder, then refresh."
+    "devHint": "Development: to fill the list with sample images, run <code>npm run seed</code> in the <code>server</code> folder, then refresh.",
+    "loadError": "Could not load listings. Make sure the API is running."
   },
   "listing": {
     "categories": {
@@ -108,6 +141,11 @@
     },
     "rent": "Rent",
     "sale": "Sale",
+    "status": {
+      "available": "Available",
+      "reserved": "Reserved",
+      "sold": "Sold"
+    },
     "noPhoto": "No photo",
     "imageUnavailable": "Image unavailable",
     "period": {
@@ -136,7 +174,9 @@
     "ownListing": "This is your listing!",
     "toastRequestTitle": "Request recorded",
     "toastRequestDesc": "A message was sent to the shop. You can add details in the conversation.",
-    "loadError": "Could not open conversation"
+    "loadError": "Could not open conversation",
+    "soldHint": "This listing is marked as sold and no longer accepts new requests.",
+    "viewSellerPage": "View seller page"
   },
   "messages": {
     "loginPrompt": "Sign in to see your messages.",
@@ -155,12 +195,39 @@
     "openOkDesc": "You can write to the shop below.",
     "openFailTitle": "Could not open conversation",
     "openFailDesc": "Please try again later.",
+    "sendFailTitle": "Could not send",
+    "sendFailDesc": "Your message could not be sent. Please try again.",
+    "loadConversationsError": "Could not load conversations.",
+    "loadMessagesError": "Could not load messages.",
     "generalThread": "General message",
-    "fallbackClient": "Customer"
+    "fallbackClient": "Customer",
+    "threadStatus": {
+      "unread": "Unread",
+      "needsReply": "Reply needed",
+      "waiting": "Waiting"
+    }
+  },
+  "seller": {
+    "pageTitle": "{{name}} · seller",
+    "notFound": "This seller does not exist or has no public profile.",
+    "backToListings": "Back to listings",
+    "listingsHeading": "Listings",
+    "noListings": "No listings available right now."
+  },
+  "favorites": {
+    "add": "Add to favorites",
+    "remove": "Remove from favorites",
+    "pageTitle": "Favorites",
+    "intro": "Listings you saved. Tap the heart again to remove one from this list.",
+    "emptyTitle": "No favorites yet",
+    "emptyDesc": "Browse listings and tap the heart to save them here.",
+    "browseListings": "Browse listings",
+    "loadError": "Could not load your favorites"
   },
   "account": {
     "title": "My account",
     "tabProfile": "Profile",
+    "tabActivity": "Activity",
     "tabNotif": "Notifications",
     "tabCatalog": "Catalogue (admin)",
     "profileTitle": "My profile",
@@ -189,14 +256,29 @@
     "emptyListings": "No published listings yet.",
     "publish": "Publish a listing",
     "editListingTitle": "Edit",
-    "deleteListingTitle": "Delete"
+    "deleteListingTitle": "Delete",
+    "activityFavorites": "Recent favorites",
+    "activityFavoritesEmpty": "No favorites yet.",
+    "activitySeeAllFavorites": "See all favorites",
+    "activityMessages": "Recent messages",
+    "activityMessagesEmpty": "No conversations yet.",
+    "activitySeeAllMessages": "Open messages"
   },
   "notifications": {
     "title": "Notifications",
     "markAll": "Mark all read",
     "empty": "No notifications yet.",
     "prefsLink": "Notification preferences",
-    "aria": "Notifications"
+    "aria": "Notifications",
+    "ariaWithCount": "Notifications — {{count}} unread",
+    "loadError": "Could not load notifications.",
+    "actionFail": "Action failed. Please try again.",
+    "disclaimer": "Message notifications are created when a message arrives. The list refreshes automatically (about every 12 seconds). This is not instant real-time messaging.",
+    "newBannerTitle": "New notifications",
+    "newBannerDesc": "+{{delta}} new · {{total}} unread total",
+    "typeLabel": {
+      "message": "Message"
+    }
   },
   "theme": {
     "label": "Theme",

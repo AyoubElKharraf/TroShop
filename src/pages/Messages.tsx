@@ -7,6 +7,7 @@ import type { ConversationRow, MessageRow } from "@/types/domain";
 import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Send, ArrowLeft, Store, MessageCircle } from "lucide-react";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useToast } from "@/hooks/use-toast";
@@ -23,8 +24,9 @@ const Messages = () => {
   const [sending, setSending] = useState(false);
   const [openingAdmin, setOpeningAdmin] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const conversationsInvalidatedRef = useRef<string | null>(null);
 
-  const { data: conversations } = useQuery({
+  const { data: conversations, isError: convError, error: convErr, refetch: refetchConversations } = useQuery({
     queryKey: ["conversations", user?.id],
     enabled: !!user,
     queryFn: async () => api<ConversationRow[]>("/api/conversations"),
@@ -35,10 +37,10 @@ const Messages = () => {
     [conversations, conversationId]
   );
 
-  const { data: msgs } = useQuery({
+  const { data: msgs, isError: msgsError, error: msgsErr, refetch: refetchMsgs } = useQuery({
     queryKey: ["messages", conversationId],
     enabled: !!conversationId,
-    refetchInterval: conversationId ? 2500 : false,
+    refetchInterval: conversationId ? (query) => (query.state.error ? false : 2500) : false,
     queryFn: async () =>
       api<MessageRow[]>(`/api/conversations/${conversationId!}/messages`),
   });
@@ -46,6 +48,17 @@ const Messages = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs]);
+
+  useEffect(() => {
+    conversationsInvalidatedRef.current = null;
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (!conversationId || msgs === undefined) return;
+    if (conversationsInvalidatedRef.current === conversationId) return;
+    conversationsInvalidatedRef.current = conversationId;
+    void queryClient.invalidateQueries({ queryKey: ["conversations", user?.id] });
+  }, [conversationId, msgs, queryClient, user?.id]);
 
   const handleOpenWithAdmin = async () => {
     setOpeningAdmin(true);
@@ -82,6 +95,12 @@ const Messages = () => {
       setMessage("");
       queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    } catch (err: unknown) {
+      toast({
+        title: t("messages.sendFailTitle"),
+        description: err instanceof Error ? err.message : t("messages.sendFailDesc"),
+        variant: "destructive",
+      });
     } finally {
       setSending(false);
     }
@@ -107,6 +126,32 @@ const Messages = () => {
       return c.is_contact_hub ? t("messages.generalThread") : c.listings?.title || "";
     }
     return c.is_contact_hub ? t("messages.generalThread") : c.listings?.title || "";
+  };
+
+  const threadBadge = (c: ConversationRow) => {
+    const s = c.thread_status;
+    if (c.unread) {
+      return (
+        <Badge className="mt-0.5 shrink-0 text-[10px]" variant="default">
+          {t("messages.threadStatus.unread")}
+        </Badge>
+      );
+    }
+    if (s === "needs_reply") {
+      return (
+        <Badge className="mt-0.5 shrink-0 text-[10px]" variant="secondary">
+          {t("messages.threadStatus.needsReply")}
+        </Badge>
+      );
+    }
+    if (s === "waiting") {
+      return (
+        <Badge className="mt-0.5 shrink-0 text-[10px]" variant="outline">
+          {t("messages.threadStatus.waiting")}
+        </Badge>
+      );
+    }
+    return null;
   };
 
   return (
@@ -137,6 +182,17 @@ const Messages = () => {
         )}
 
         <div className="overflow-y-auto">
+          {convError && (
+            <div className="border-b p-4 text-sm">
+              <p className="text-destructive">{t("messages.loadConversationsError")}</p>
+              <p className="mt-1 text-muted-foreground">
+                {convErr instanceof Error ? convErr.message : String(convErr)}
+              </p>
+              <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => void refetchConversations()}>
+                {t("common.retry")}
+              </Button>
+            </div>
+          )}
           {conversations?.map((conv) => (
             <Link
               key={conv.id}
@@ -151,8 +207,14 @@ const Messages = () => {
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-heading text-sm font-bold">{convTitle(conv)}</p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <p className="truncate font-heading text-sm font-bold">{convTitle(conv)}</p>
+                  {threadBadge(conv)}
+                </div>
                 <p className="truncate text-xs text-muted-foreground">{convSubtitle(conv)}</p>
+                {conv.last_message_preview && (
+                  <p className="line-clamp-2 text-[11px] text-muted-foreground/90">{conv.last_message_preview}</p>
+                )}
                 <p className="text-[10px] text-muted-foreground/80">
                   {new Date(conv.updated_at).toLocaleString(undefined, {
                     day: "numeric",
@@ -194,6 +256,17 @@ const Messages = () => {
             </div>
           </div>
           <div className="flex-1 space-y-3 overflow-y-auto p-4">
+            {msgsError && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm">
+                <p className="font-medium text-destructive">{t("messages.loadMessagesError")}</p>
+                <p className="mt-1 text-muted-foreground">
+                  {msgsErr instanceof Error ? msgsErr.message : String(msgsErr)}
+                </p>
+                <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => void refetchMsgs()}>
+                  {t("common.retry")}
+                </Button>
+              </div>
+            )}
             {msgs?.map((msg) => {
               const isMe = msg.sender_id === user.id;
               return (

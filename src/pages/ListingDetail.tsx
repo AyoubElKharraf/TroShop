@@ -1,5 +1,5 @@
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import type { Listing, Profile } from "@/types/domain";
@@ -18,21 +18,24 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { MapPin, Calendar, MessageCircle, ArrowLeft, Pencil, Flag } from "lucide-react";
+import { MapPin, Calendar, MessageCircle, ArrowLeft, Pencil, Flag, Heart } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { motion } from "framer-motion";
 
 const ListingDetail = () => {
   const { t, i18n } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [selectedImage, setSelectedImage] = useState(0);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [reportSending, setReportSending] = useState(false);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
 
   const dateLocale = i18n.language === "en" ? "en-US" : "fr-FR";
 
@@ -47,6 +50,15 @@ const ListingDetail = () => {
     queryKey: ["seller", listing?.user_id],
     enabled: !!listing,
     queryFn: async () => api<Profile>(`/api/users/${listing!.user_id}/profile`),
+  });
+
+  const { data: favoriteIds = [] } = useQuery({
+    queryKey: ["favorite-ids", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const res = await api<{ ids: string[] }>("/api/me/favorites/ids");
+      return res.ids || [];
+    },
   });
 
   const handleContact = async () => {
@@ -100,6 +112,27 @@ const ListingDetail = () => {
     }
   };
 
+  const toggleFavorite = async () => {
+    if (!user || !listing) return;
+    setFavoriteLoading(true);
+    try {
+      if (favoriteIds.includes(listing.id)) {
+        await api(`/api/listings/${listing.id}/favorite`, { method: "DELETE" });
+      } else {
+        await api(`/api/listings/${listing.id}/favorite`, { method: "POST" });
+      }
+      await queryClient.invalidateQueries({ queryKey: ["favorite-ids", user.id] });
+    } catch (err: unknown) {
+      toast({
+        title: t("common.error"),
+        description: err instanceof Error ? err.message : t("common.error"),
+        variant: "destructive",
+      });
+    } finally {
+      setFavoriteLoading(false);
+    }
+  };
+
   if (isLoading) {
     return <div className="container py-12 text-center text-muted-foreground">{t("common.loading")}</div>;
   }
@@ -109,6 +142,8 @@ const ListingDetail = () => {
 
   const images = listing.images && listing.images.length > 0 ? listing.images : [];
   const isOwner = user?.role === "admin" && user?.id === listing.user_id;
+  const isSold = listing.status === "sold";
+  const isFavorite = favoriteIds.includes(listing.id);
 
   const catLabel = t(`listing.categories.${listing.category}`, { defaultValue: listing.category });
   const condLabel = t(`listing.conditions.${listing.condition}`, { defaultValue: listing.condition });
@@ -159,6 +194,11 @@ const ListingDetail = () => {
               {listing.listing_type === "location" ? t("listing.rent") : t("listing.sale")}
             </Badge>
             <Badge variant="outline">{condLabel}</Badge>
+            {listing.status !== "available" && (
+              <Badge variant={listing.status === "sold" ? "destructive" : "outline"}>
+                {t(`listing.status.${listing.status}`)}
+              </Badge>
+            )}
             {!listing.is_active && <Badge variant="destructive">{t("listingDetail.hidden")}</Badge>}
           </div>
           <h1 className="font-heading text-2xl font-bold">{listing.title}</h1>
@@ -182,14 +222,17 @@ const ListingDetail = () => {
           </div>
 
           {seller && (
-            <div className="mt-6 flex items-center gap-3 rounded-xl border p-4">
+            <Link
+              to={`/vendeur/${listing.user_id}`}
+              className="mt-6 flex items-center gap-3 rounded-xl border p-4 transition-colors hover:bg-muted/50"
+            >
               <Avatar>
                 <AvatarImage src={seller.avatar_url || ""} />
                 <AvatarFallback className="bg-primary text-primary-foreground font-bold">
                   {seller.display_name.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <div>
+              <div className="min-w-0 flex-1 text-left">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {t("listingDetail.shop")}
                 </p>
@@ -199,8 +242,9 @@ const ListingDetail = () => {
                     date: new Date(seller.created_at).toLocaleDateString(dateLocale),
                   })}
                 </p>
+                <p className="mt-1 text-xs font-medium text-primary">{t("listingDetail.viewSellerPage")}</p>
               </div>
-            </div>
+            </Link>
           )}
 
           <div className="mt-6 flex flex-col gap-3">
@@ -212,9 +256,30 @@ const ListingDetail = () => {
               </Button>
             )}
             {!isOwner && (
-              <Button onClick={handleContact} className="w-full gap-2 font-heading font-semibold" size="lg">
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.96 }}
+                whileHover={{ scale: 1.01 }}
+                onClick={() => void toggleFavorite()}
+                disabled={!user || favoriteLoading}
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Heart className={`h-4 w-4 ${isFavorite ? "fill-primary text-primary" : ""}`} />
+                {isFavorite ? t("favorites.remove") : t("favorites.add")}
+              </motion.button>
+            )}
+            {!isOwner && (
+              <Button
+                onClick={handleContact}
+                className="w-full gap-2 font-heading font-semibold"
+                size="lg"
+                disabled={isSold || !listing.is_active}
+              >
                 <MessageCircle className="h-5 w-5" /> {t("listingDetail.requestProduct")}
               </Button>
+            )}
+            {isSold && !isOwner && (
+              <p className="text-center text-xs text-muted-foreground">{t("listingDetail.soldHint")}</p>
             )}
             {user && !isOwner && (
               <Dialog open={reportOpen} onOpenChange={setReportOpen}>

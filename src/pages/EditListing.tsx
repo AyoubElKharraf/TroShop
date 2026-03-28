@@ -29,6 +29,7 @@ const EditListing = () => {
     price: "",
     price_period: "jour",
     condition: "bon",
+    status: "available",
     location: "",
     is_active: true,
   });
@@ -68,6 +69,7 @@ const EditListing = () => {
       price: String(listing.price),
       price_period: listing.price_period || "jour",
       condition: listing.condition,
+      status: listing.status || "available",
       location: listing.location || "",
       is_active: listing.is_active,
     });
@@ -131,6 +133,7 @@ const EditListing = () => {
           price: parseFloat(form.price) || 0,
           price_period: lt === "location" ? form.price_period : null,
           condition: form.condition,
+          status: form.status,
           location: form.location || null,
           is_active: form.is_active,
           images: imageUrls,
@@ -242,6 +245,18 @@ const EditListing = () => {
                 <Label>Localisation</Label>
                 <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Paris, Lyon..." />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Statut</Label>
+              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="available">Disponible</SelectItem>
+                  <SelectItem value="reserved">Réservé</SelectItem>
+                  <SelectItem value="sold">Vendu</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

@@ -95,6 +95,7 @@ function mapListing(row) {
     location: row.location,
     images,
     is_active: row.is_active === 1 || row.is_active === true,
+    status: row.status || "available",
     is_contact_hub: row.is_contact_hub === 1 || row.is_contact_hub === true,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -229,6 +230,13 @@ async function requireAdminListingOwner(req, res, next) {
   }
 }
 
+/** Express 4 : évite les rejets de promesses non gérés sur les handlers async */
+function asyncHandler(fn) {
+  return (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uid = req.user?.userId;
@@ -257,7 +265,7 @@ const upload = multer({
 const PW_MIN = 8;
 
 // --- Auth ---
-app.post("/api/auth/register", authLimiter, async (req, res) => {
+app.post("/api/auth/register", authLimiter, asyncHandler(async (req, res) => {
   const { email, password, display_name } = req.body || {};
   if (!email || !password || !display_name) {
     return res.status(400).json({ error: "email, password et display_name requis" });
@@ -305,9 +313,9 @@ app.post("/api/auth/register", authLimiter, async (req, res) => {
     token,
     user: { id: userId, email: emailNorm, role: "user" },
   });
-});
+}));
 
-app.post("/api/auth/login", authLimiter, async (req, res) => {
+app.post("/api/auth/login", authLimiter, asyncHandler(async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) {
     return res.status(400).json({ error: "email et mot de passe requis" });
@@ -329,9 +337,9 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
     { expiresIn: "7d" }
   );
   res.json({ token, user: { id: user.id, email: user.email, role } });
-});
+}));
 
-app.post("/api/auth/forgot-password", authLimiter, async (req, res) => {
+app.post("/api/auth/forgot-password", authLimiter, asyncHandler(async (req, res) => {
   const email = (req.body?.email || "").trim().toLowerCase();
   const generic = {
     ok: true,
@@ -357,9 +365,9 @@ app.post("/api/auth/forgot-password", authLimiter, async (req, res) => {
   const resetUrl = `${origin}/auth/reinitialiser?token=${encodeURIComponent(plainToken)}`;
   await sendPasswordResetEmail(u.email, resetUrl);
   res.json(generic);
-});
+}));
 
-app.post("/api/auth/reset-password", authLimiter, async (req, res) => {
+app.post("/api/auth/reset-password", authLimiter, asyncHandler(async (req, res) => {
   const { token, password } = req.body || {};
   if (!token || !password) {
     return res.status(400).json({ error: "token et mot de passe requis" });
@@ -380,9 +388,9 @@ app.post("/api/auth/reset-password", authLimiter, async (req, res) => {
   await pool.query("UPDATE users SET password_hash = ? WHERE id = ?", [newHash, row.user_id]);
   await pool.query("DELETE FROM password_reset_tokens WHERE user_id = ?", [row.user_id]);
   res.json({ ok: true, message: "Mot de passe mis à jour. Vous pouvez vous connecter." });
-});
+}));
 
-app.get("/api/auth/me", authMiddleware, async (req, res) => {
+app.get("/api/auth/me", authMiddleware, asyncHandler(async (req, res) => {
   const [rows] = await pool.query("SELECT id, email, role FROM users WHERE id = ?", [req.user.userId]);
   const u = rows[0];
   if (!u) return res.status(404).json({ error: "Utilisateur introuvable" });
@@ -390,18 +398,19 @@ app.get("/api/auth/me", authMiddleware, async (req, res) => {
   const [r2] = await pool.query("SELECT role FROM users WHERE id = ?", [u.id]);
   const role = r2[0]?.role === "admin" ? "admin" : "user";
   res.json({ user: { id: u.id, email: u.email, role } });
-});
+}));
 
-app.delete("/api/me", authMiddleware, async (req, res) => {
+app.delete("/api/me", authMiddleware, asyncHandler(async (req, res) => {
   await pool.query("DELETE FROM users WHERE id = ?", [req.user.userId]);
   res.status(204).end();
-});
+}));
 
 // --- Listings ---
-app.get("/api/listings", async (req, res) => {
+app.get("/api/listings", asyncHandler(async (req, res) => {
   const search = (req.query.search || req.query.q || "").trim();
   const category = req.query.category;
   const listingType = req.query.listing_type;
+  const availableOnly = String(req.query.available ?? "1") !== "0";
   const sortBy = req.query.sort || "recent";
   const page = Math.max(1, Number(req.query.page) || 1);
   const pageSize = Math.min(48, Math.max(1, Number(req.query.pageSize) || 12));
@@ -413,6 +422,9 @@ app.get("/api/listings", async (req, res) => {
 
   const params = [];
   let where = "l.is_active = 1 AND COALESCE(l.is_contact_hub, 0) = 0";
+  if (availableOnly) {
+    where += " AND COALESCE(l.status, 'available') = 'available'";
+  }
   if (search) {
     where += " AND l.title LIKE ?";
     params.push(`%${search}%`);
@@ -444,9 +456,9 @@ app.get("/api/listings", async (req, res) => {
     pageSize,
     totalPages,
   });
-});
+}));
 
-app.get("/api/listings/:id", async (req, res) => {
+app.get("/api/listings/:id", asyncHandler(async (req, res) => {
   const [rows] = await pool.query("SELECT * FROM listings WHERE id = ?", [req.params.id]);
   const listing = rows[0];
   if (!listing) return res.status(404).json({ error: "Annonce introuvable" });
@@ -454,9 +466,9 @@ app.get("/api/listings/:id", async (req, res) => {
     return res.status(404).json({ error: "Annonce introuvable" });
   }
   res.json(mapListing(listing));
-});
+}));
 
-app.post("/api/listings", authMiddleware, requireAdmin, upload.array("images", 5), async (req, res) => {
+app.post("/api/listings", authMiddleware, requireAdmin, upload.array("images", 5), asyncHandler(async (req, res) => {
   try {
     const {
       title,
@@ -467,6 +479,7 @@ app.post("/api/listings", authMiddleware, requireAdmin, upload.array("images", 5
       price_period,
       condition: cond,
       location,
+      status,
     } = req.body;
 
     if (!title || !category) {
@@ -484,9 +497,14 @@ app.post("/api/listings", authMiddleware, requireAdmin, upload.array("images", 5
     const lt = listing_type || "vente";
     const pp = lt === "location" && price_period ? price_period : null;
 
+    const listingStatus =
+      status === "reserved" || status === "sold" || status === "available"
+        ? status
+        : "available";
+
     await pool.query(
-      `INSERT INTO listings (id, user_id, title, description, category, listing_type, price, price_period, \`condition\`, location, images)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO listings (id, user_id, title, description, category, listing_type, price, price_period, \`condition\`, location, images, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         req.user.userId,
@@ -499,6 +517,7 @@ app.post("/api/listings", authMiddleware, requireAdmin, upload.array("images", 5
         cond || "bon",
         location ? String(location).slice(0, 255) : null,
         JSON.stringify(publicUrls),
+        listingStatus,
       ]
     );
 
@@ -508,17 +527,17 @@ app.post("/api/listings", authMiddleware, requireAdmin, upload.array("images", 5
     console.error(e);
     res.status(500).json({ error: e.message || "Erreur création annonce" });
   }
-});
+}));
 
 /** Upload photos (sans lier à une annonce) — renvoie des URLs à inclure dans PATCH listings. */
-app.post("/api/upload/listing-images", authMiddleware, requireAdmin, upload.array("images", 5), async (req, res) => {
+app.post("/api/upload/listing-images", authMiddleware, requireAdmin, upload.array("images", 5), asyncHandler(async (req, res) => {
   const urls = (req.files || []).map(
     (f) => `/uploads/listings/${req.user.userId}/${f.filename}`
   );
   res.json({ urls });
-});
+}));
 
-app.patch("/api/listings/:id", authMiddleware, requireAdminListingOwner, async (req, res) => {
+app.patch("/api/listings/:id", authMiddleware, requireAdminListingOwner, asyncHandler(async (req, res) => {
   const listingId = req.params.id;
 
   const body = req.body || {};
@@ -532,6 +551,7 @@ app.patch("/api/listings/:id", authMiddleware, requireAdminListingOwner, async (
     "condition",
     "location",
     "is_active",
+    "status",
     "images",
   ];
   const updates = [];
@@ -559,6 +579,13 @@ app.patch("/api/listings/:id", authMiddleware, requireAdminListingOwner, async (
     } else if (key === "is_active") {
       updates.push("is_active = ?");
       vals.push(body.is_active ? 1 : 0);
+    } else if (key === "status") {
+      const next = String(body.status || "");
+      if (!["available", "reserved", "sold"].includes(next)) {
+        return res.status(400).json({ error: "status invalide" });
+      }
+      updates.push("status = ?");
+      vals.push(next);
     } else {
       updates.push(`${key === "condition" ? "`condition`" : key} = ?`);
       vals.push(body[key]);
@@ -571,14 +598,14 @@ app.patch("/api/listings/:id", authMiddleware, requireAdminListingOwner, async (
   await pool.query(`UPDATE listings SET ${updates.join(", ")} WHERE id = ?`, vals);
   const [rows] = await pool.query("SELECT * FROM listings WHERE id = ?", [listingId]);
   res.json(mapListing(rows[0]));
-});
+}));
 
-app.delete("/api/listings/:id", authMiddleware, requireAdminListingOwner, async (req, res) => {
+app.delete("/api/listings/:id", authMiddleware, requireAdminListingOwner, asyncHandler(async (req, res) => {
   await pool.query("DELETE FROM listings WHERE id = ?", [req.params.id]);
   res.status(204).end();
-});
+}));
 
-app.post("/api/listings/:id/report", authMiddleware, async (req, res) => {
+app.post("/api/listings/:id/report", authMiddleware, asyncHandler(async (req, res) => {
   const listingId = req.params.id;
   const reason = String(req.body?.reason || "").trim();
   if (reason.length < 10 || reason.length > 500) {
@@ -602,17 +629,72 @@ app.post("/api/listings/:id/report", authMiddleware, async (req, res) => {
     throw e;
   }
   res.status(201).json({ ok: true, message: "Signalement enregistré. Merci." });
-});
+}));
+
+app.get("/api/me/favorites/ids", authMiddleware, asyncHandler(async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT listing_id FROM favorites WHERE user_id = ?`,
+      [req.user.userId]
+    );
+    res.json({ ids: rows.map((r) => r.listing_id) });
+  } catch (e) {
+    if (e.code === "ER_NO_SUCH_TABLE") return res.json({ ids: [] });
+    throw e;
+  }
+}));
+
+app.get("/api/me/favorites", authMiddleware, asyncHandler(async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT l.*
+       FROM favorites f
+       INNER JOIN listings l ON l.id = f.listing_id
+       WHERE f.user_id = ? AND l.is_active = 1 AND COALESCE(l.is_contact_hub, 0) = 0
+       ORDER BY f.created_at DESC`,
+      [req.user.userId]
+    );
+    res.json(rows.map(mapListing));
+  } catch (e) {
+    if (e.code === "ER_NO_SUCH_TABLE") return res.json([]);
+    throw e;
+  }
+}));
+
+app.post("/api/listings/:id/favorite", authMiddleware, asyncHandler(async (req, res) => {
+  const listingId = req.params.id;
+  const [rows] = await pool.query(
+    "SELECT id, COALESCE(is_contact_hub, 0) AS is_contact_hub FROM listings WHERE id = ?",
+    [listingId]
+  );
+  if (!rows.length) return res.status(404).json({ error: "Annonce introuvable" });
+  if (rows[0].is_contact_hub === 1 || rows[0].is_contact_hub === true) {
+    return res.status(400).json({ error: "Annonce non éligible aux favoris." });
+  }
+  await pool.query(
+    "INSERT IGNORE INTO favorites (user_id, listing_id) VALUES (?, ?)",
+    [req.user.userId, listingId]
+  );
+  res.status(201).json({ ok: true });
+}));
+
+app.delete("/api/listings/:id/favorite", authMiddleware, asyncHandler(async (req, res) => {
+  await pool.query(
+    "DELETE FROM favorites WHERE user_id = ? AND listing_id = ?",
+    [req.user.userId, req.params.id]
+  );
+  res.status(204).end();
+}));
 
 // --- Profiles ---
-app.get("/api/profile", authMiddleware, async (req, res) => {
+app.get("/api/profile", authMiddleware, asyncHandler(async (req, res) => {
   const [rows] = await pool.query("SELECT * FROM profiles WHERE user_id = ?", [req.user.userId]);
   const p = rows[0];
   if (!p) return res.status(404).json({ error: "Profil introuvable" });
   res.json(mapProfile(p));
-});
+}));
 
-app.patch("/api/profile", authMiddleware, async (req, res) => {
+app.patch("/api/profile", authMiddleware, asyncHandler(async (req, res) => {
   const { display_name, bio, location } = req.body || {};
   const updates = [];
   const vals = [];
@@ -633,36 +715,44 @@ app.patch("/api/profile", authMiddleware, async (req, res) => {
   await pool.query(`UPDATE profiles SET ${updates.join(", ")} WHERE user_id = ?`, vals);
   const [rows] = await pool.query("SELECT * FROM profiles WHERE user_id = ?", [req.user.userId]);
   res.json(mapProfile(rows[0]));
-});
+}));
 
-app.get("/api/users/:userId/profile", async (req, res) => {
+app.get("/api/users/:userId/profile", asyncHandler(async (req, res) => {
   const [rows] = await pool.query("SELECT * FROM profiles WHERE user_id = ?", [req.params.userId]);
   const p = rows[0];
   if (!p) return res.status(404).json({ error: "Profil introuvable" });
   res.json(mapProfile(p));
-});
+}));
 
-app.get("/api/me/listings", authMiddleware, async (req, res) => {
+/** Catalogue public d’un vendeur (annonces actives, hors fiche contact / vendues). */
+app.get("/api/users/:userId/listings", asyncHandler(async (req, res) => {
+  const [rows] = await pool.query(
+    `SELECT * FROM listings
+     WHERE user_id = ? AND is_active = 1 AND COALESCE(is_contact_hub, 0) = 0 AND status != 'sold'
+     ORDER BY created_at DESC`,
+    [req.params.userId]
+  );
+  res.json(rows.map(mapListing));
+}));
+
+app.get("/api/me/listings", authMiddleware, asyncHandler(async (req, res) => {
   const [rows] = await pool.query(
     "SELECT * FROM listings WHERE user_id = ? AND COALESCE(is_contact_hub, 0) = 0 ORDER BY created_at DESC",
     [req.user.userId]
   );
   res.json(rows.map(mapListing));
-});
+}));
 
-// --- Conversations ---
-app.get("/api/conversations", authMiddleware, async (req, res) => {
-  const uid = req.user.userId;
-  const [roleRows] = await pool.query("SELECT role FROM users WHERE id = ?", [uid]);
-  const viewerIsAdmin = roleRows[0]?.role === "admin";
-
-  const [rows] = await pool.query(
-    `SELECT c.*,
+const CONVERSATIONS_LIST_SQL = `
+     SELECT c.*,
             l.title AS listing_title, l.images AS listing_images, COALESCE(l.is_contact_hub, 0) AS is_contact_hub,
             bp.display_name AS buyer_display_name,
             sp.display_name AS seller_display_name,
             bu.email AS buyer_email,
-            su.email AS seller_email
+            su.email AS seller_email,
+            (SELECT m.sender_id FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_sender_id,
+            (SELECT LEFT(m.content, 140) FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message_preview,
+            (SELECT m.created_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message_at
      FROM conversations c
      INNER JOIN listings l ON l.id = c.listing_id
      LEFT JOIN profiles bp ON bp.user_id = c.buyer_id
@@ -670,9 +760,45 @@ app.get("/api/conversations", authMiddleware, async (req, res) => {
      LEFT JOIN users bu ON bu.id = c.buyer_id
      LEFT JOIN users su ON su.id = c.seller_id
      WHERE c.buyer_id = ? OR c.seller_id = ?
-     ORDER BY c.updated_at DESC`,
-    [uid, uid]
-  );
+     ORDER BY c.updated_at DESC`;
+
+/** Sans migration 007 : pas de colonnes de lecture — on expose quand même le fil et le dernier message. */
+const CONVERSATIONS_LIST_SQL_LEGACY = `
+     SELECT c.id, c.listing_id, c.buyer_id, c.seller_id, c.created_at, c.updated_at,
+            CAST(NULL AS DATETIME(3)) AS buyer_last_read_at,
+            CAST(NULL AS DATETIME(3)) AS seller_last_read_at,
+            l.title AS listing_title, l.images AS listing_images, COALESCE(l.is_contact_hub, 0) AS is_contact_hub,
+            bp.display_name AS buyer_display_name,
+            sp.display_name AS seller_display_name,
+            bu.email AS buyer_email,
+            su.email AS seller_email,
+            (SELECT m.sender_id FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_sender_id,
+            (SELECT LEFT(m.content, 140) FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message_preview,
+            (SELECT m.created_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message_at
+     FROM conversations c
+     INNER JOIN listings l ON l.id = c.listing_id
+     LEFT JOIN profiles bp ON bp.user_id = c.buyer_id
+     LEFT JOIN profiles sp ON sp.user_id = c.seller_id
+     LEFT JOIN users bu ON bu.id = c.buyer_id
+     LEFT JOIN users su ON su.id = c.seller_id
+     WHERE c.buyer_id = ? OR c.seller_id = ?
+     ORDER BY c.updated_at DESC`;
+
+// --- Conversations ---
+app.get("/api/conversations", authMiddleware, asyncHandler(async (req, res) => {
+  const uid = req.user.userId;
+  const [roleRows] = await pool.query("SELECT role FROM users WHERE id = ?", [uid]);
+  const viewerIsAdmin = roleRows[0]?.role === "admin";
+
+  let rows;
+  let legacyConversationList = false;
+  try {
+    ;[rows] = await pool.query(CONVERSATIONS_LIST_SQL, [uid, uid]);
+  } catch (e) {
+    if (e.code !== "ER_BAD_FIELD_ERROR") throw e;
+    legacyConversationList = true;
+    ;[rows] = await pool.query(CONVERSATIONS_LIST_SQL_LEGACY, [uid, uid]);
+  }
 
   const out = rows.map((row) => {
     let imgs = row.listing_images;
@@ -702,6 +828,20 @@ app.get("/api/conversations", authMiddleware, async (req, res) => {
 
     const listTitle = isContactHub ? "Message général" : row.listing_title;
 
+    const lastSenderId = row.last_sender_id || null;
+    const lastMessageAt = row.last_message_at || null;
+    const lastFromPeer = Boolean(lastSenderId && lastSenderId !== uid);
+    const myReadAt = isSeller ? row.seller_last_read_at : row.buyer_last_read_at;
+    let unread = false;
+    if (!legacyConversationList && lastFromPeer && lastMessageAt) {
+      if (!myReadAt) unread = true;
+      else unread = new Date(lastMessageAt).getTime() > new Date(myReadAt).getTime();
+    }
+    let thread_status = "neutral";
+    if (!legacyConversationList && unread) thread_status = "unread";
+    else if (lastFromPeer) thread_status = "needs_reply";
+    else if (lastSenderId === uid) thread_status = "waiting";
+
     return {
       id: row.id,
       listing_id: row.listing_id,
@@ -713,20 +853,35 @@ app.get("/api/conversations", authMiddleware, async (req, res) => {
       peer_display_name,
       peer_email,
       listings: { title: listTitle, images: imgs },
+      last_message_preview: row.last_message_preview || null,
+      last_message_at: lastMessageAt,
+      unread,
+      thread_status,
     };
   });
+  const priority = (x) =>
+    x.unread ? 3 : x.thread_status === "needs_reply" ? 2 : x.thread_status === "waiting" ? 1 : 0;
+  out.sort((a, b) => {
+    const pa = priority(a);
+    const pb = priority(b);
+    if (pa !== pb) return pb - pa;
+    return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+  });
   res.json(out);
-});
+}));
 
-app.post("/api/conversations/open", authMiddleware, async (req, res) => {
+app.post("/api/conversations/open", authMiddleware, asyncHandler(async (req, res) => {
   const { listing_id } = req.body || {};
   if (!listing_id) return res.status(400).json({ error: "listing_id requis" });
 
   const [L] = await pool.query(
-    "SELECT user_id, title, COALESCE(is_contact_hub, 0) AS is_contact_hub FROM listings WHERE id = ?",
+    "SELECT user_id, title, COALESCE(is_contact_hub, 0) AS is_contact_hub, COALESCE(status, 'available') AS status, is_active FROM listings WHERE id = ?",
     [listing_id]
   );
   if (!L.length) return res.status(404).json({ error: "Annonce introuvable" });
+  if (!L[0].is_contact_hub && (L[0].is_active !== 1 || L[0].status === "sold")) {
+    return res.status(409).json({ error: "Cette annonce n'est plus disponible." });
+  }
   const sellerId = L[0].user_id;
   const listingTitle = L[0].title;
   const isContactHub = L[0].is_contact_hub === 1 || L[0].is_contact_hub === true;
@@ -758,10 +913,10 @@ app.post("/api/conversations/open", authMiddleware, async (req, res) => {
   await pool.query("UPDATE conversations SET updated_at = CURRENT_TIMESTAMP(3) WHERE id = ?", [id]);
   await notifyNewMessage(sellerId, id, intro);
   res.status(201).json({ id });
-});
+}));
 
 /** Ouvre (ou récupère) la conversation « contact boutique » pour un client. */
-app.post("/api/conversations/open-with-admin", authMiddleware, async (req, res) => {
+app.post("/api/conversations/open-with-admin", authMiddleware, asyncHandler(async (req, res) => {
   const buyerId = req.user.userId;
   const [roleRows] = await pool.query("SELECT role FROM users WHERE id = ?", [buyerId]);
   if (roleRows[0]?.role === "admin") {
@@ -813,9 +968,9 @@ app.post("/api/conversations/open-with-admin", authMiddleware, async (req, res) 
   await pool.query("UPDATE conversations SET updated_at = CURRENT_TIMESTAMP(3) WHERE id = ?", [id]);
   await notifyNewMessage(sellerId, id, intro);
   res.status(201).json({ id });
-});
+}));
 
-app.get("/api/conversations/:conversationId/messages", authMiddleware, async (req, res) => {
+app.get("/api/conversations/:conversationId/messages", authMiddleware, asyncHandler(async (req, res) => {
   const cid = req.params.conversationId;
   const uid = req.user.userId;
   const [c] = await pool.query(
@@ -828,10 +983,21 @@ app.get("/api/conversations/:conversationId/messages", authMiddleware, async (re
     `SELECT m.* FROM messages m WHERE m.conversation_id = ? ORDER BY m.created_at ASC`,
     [cid]
   );
+  try {
+    await pool.query(
+      `UPDATE conversations SET
+        buyer_last_read_at = IF(buyer_id = ?, CURRENT_TIMESTAMP(3), buyer_last_read_at),
+        seller_last_read_at = IF(seller_id = ?, CURRENT_TIMESTAMP(3), seller_last_read_at)
+      WHERE id = ?`,
+      [uid, uid, cid]
+    );
+  } catch (e) {
+    if (e.code !== "ER_BAD_FIELD_ERROR") throw e;
+  }
   res.json(rows);
-});
+}));
 
-app.post("/api/conversations/:conversationId/messages", authMiddleware, async (req, res) => {
+app.post("/api/conversations/:conversationId/messages", authMiddleware, asyncHandler(async (req, res) => {
   const cid = req.params.conversationId;
   const uid = req.user.userId;
   const { content } = req.body || {};
@@ -862,10 +1028,10 @@ app.post("/api/conversations/:conversationId/messages", authMiddleware, async (r
 
   const [rows] = await pool.query("SELECT * FROM messages WHERE id = ?", [id]);
   res.status(201).json(rows[0]);
-});
+}));
 
 // --- Notifications & préférences ---
-app.get("/api/notifications", authMiddleware, async (req, res) => {
+app.get("/api/notifications", authMiddleware, asyncHandler(async (req, res) => {
   try {
     const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 25));
     const [rows] = await pool.query(
@@ -877,9 +1043,9 @@ app.get("/api/notifications", authMiddleware, async (req, res) => {
     if (e.code === "ER_NO_SUCH_TABLE") return res.json([]);
     throw e;
   }
-});
+}));
 
-app.get("/api/notifications/unread-count", authMiddleware, async (req, res) => {
+app.get("/api/notifications/unread-count", authMiddleware, asyncHandler(async (req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT COUNT(*) AS c FROM notifications WHERE user_id = ? AND read_at IS NULL`,
@@ -890,9 +1056,9 @@ app.get("/api/notifications/unread-count", authMiddleware, async (req, res) => {
     if (e.code === "ER_NO_SUCH_TABLE") return res.json({ count: 0 });
     throw e;
   }
-});
+}));
 
-app.patch("/api/notifications/:id/read", authMiddleware, async (req, res) => {
+app.patch("/api/notifications/:id/read", authMiddleware, asyncHandler(async (req, res) => {
   const [r] = await pool.query(
     `UPDATE notifications SET read_at = CURRENT_TIMESTAMP(3) WHERE id = ? AND user_id = ?`,
     [req.params.id, req.user.userId]
@@ -901,17 +1067,17 @@ app.patch("/api/notifications/:id/read", authMiddleware, async (req, res) => {
     return res.status(404).json({ error: "Introuvable" });
   }
   res.json({ ok: true });
-});
+}));
 
-app.post("/api/notifications/read-all", authMiddleware, async (req, res) => {
+app.post("/api/notifications/read-all", authMiddleware, asyncHandler(async (req, res) => {
   await pool.query(
     `UPDATE notifications SET read_at = CURRENT_TIMESTAMP(3) WHERE user_id = ? AND read_at IS NULL`,
     [req.user.userId]
   );
   res.json({ ok: true });
-});
+}));
 
-app.get("/api/me/preferences", authMiddleware, async (req, res) => {
+app.get("/api/me/preferences", authMiddleware, asyncHandler(async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT notify_messages FROM user_preferences WHERE user_id = ?", [
       req.user.userId,
@@ -924,9 +1090,9 @@ app.get("/api/me/preferences", authMiddleware, async (req, res) => {
     if (e.code === "ER_NO_SUCH_TABLE") return res.json({ notify_messages: true });
     throw e;
   }
-});
+}));
 
-app.patch("/api/me/preferences", authMiddleware, async (req, res) => {
+app.patch("/api/me/preferences", authMiddleware, asyncHandler(async (req, res) => {
   const { notify_messages } = req.body || {};
   if (notify_messages === undefined) {
     return res.status(400).json({ error: "notify_messages requis (booléen)" });
@@ -947,23 +1113,33 @@ app.patch("/api/me/preferences", authMiddleware, async (req, res) => {
     }
     throw e;
   }
-});
+}));
 
-app.get("/api/health", async (req, res) => {
+app.get("/api/health", asyncHandler(async (req, res) => {
   try {
     await pool.query("SELECT 1");
     res.json({ ok: true, db: true, env: config.NODE_ENV });
   } catch (e) {
     res.status(503).json({ ok: false, db: false });
   }
-});
+}));
 
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     return res.status(400).json({ error: err.message });
   }
   console.error(err);
-  res.status(500).json({ error: err.message || "Erreur serveur" });
+  let status = 500;
+  if (err.code === "ER_ACCESS_DENIED_ERROR" || err.code === "ECONNREFUSED" || err.code === "PROTOCOL_CONNECTION_LOST") {
+    status = 503;
+  }
+  const publicMessage =
+    status === 503
+      ? "Service temporairement indisponible (base de données)."
+      : config.isProd
+        ? "Erreur serveur"
+        : err.message || "Erreur serveur";
+  res.status(status).json({ error: publicMessage });
 });
 
 app.listen(PORT, () => {

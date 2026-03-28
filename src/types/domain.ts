@@ -13,6 +13,7 @@ export interface Listing {
   location: string | null;
   images: string[] | null;
   is_active: boolean;
+  status: "available" | "reserved" | "sold";
   /** Fiche technique masquée (contact boutique), non exposée au catalogue public. */
   is_contact_hub?: boolean;
   created_at: string;
@@ -45,6 +46,8 @@ export interface AuthUser {
   role?: "user" | "admin";
 }
 
+export type ConversationThreadStatus = "unread" | "needs_reply" | "waiting" | "neutral";
+
 export interface ConversationRow {
   id: string;
   listing_id: string;
@@ -59,6 +62,13 @@ export interface ConversationRow {
   /** Renseigné pour l’admin : email du client ou de la boutique. */
   peer_email?: string | null;
   listings: { title: string; images: string[] };
+  /** Dernier message (extrait), si disponible. */
+  last_message_preview?: string | null;
+  last_message_at?: string | null;
+  /** Message(s) de l’interlocuteur non lus depuis la dernière ouverture du fil. */
+  unread?: boolean;
+  /** État du fil pour badges (Sprint 2). */
+  thread_status?: ConversationThreadStatus;
 }
 
 export interface MessageRow {

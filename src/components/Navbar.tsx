@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Menu, X, Plus, MessageCircle, User, LogOut } from "lucide-react";
+import { Menu, X, Plus, MessageCircle, User, LogOut, Heart } from "lucide-react";
 import { useState } from "react";
 import { BrandIcon } from "@/components/BrandIcon";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -46,7 +46,18 @@ const Navbar = () => {
               )}
               <div className="flex items-center gap-1">
                 <NotificationBell />
-                <Link to="/messages" className="p-2 text-muted-foreground hover:text-foreground transition-colors">
+                <Link
+                  to="/favoris"
+                  className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label={t("nav.favorites")}
+                >
+                  <Heart className="h-5 w-5" />
+                </Link>
+                <Link
+                  to="/messages"
+                  className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label={t("nav.messages")}
+                >
                   <MessageCircle className="h-5 w-5" />
                 </Link>
               </div>
@@ -84,7 +95,13 @@ const Navbar = () => {
           <LanguageSwitcher />
           <ThemeToggle />
           {user && <NotificationBell />}
-          <button type="button" onClick={() => setMobileOpen(!mobileOpen)}>
+          <button
+            type="button"
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-foreground"
+            onClick={() => setMobileOpen(!mobileOpen)}
+            aria-expanded={mobileOpen}
+            aria-label={mobileOpen ? t("nav.menuClose") : t("nav.menuOpen")}
+          >
             {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
         </div>
@@ -105,6 +122,9 @@ const Navbar = () => {
                     </Button>
                   </Link>
                 )}
+                <Link to="/favoris" onClick={() => setMobileOpen(false)} className="text-sm font-medium">
+                  {t("nav.favorites")}
+                </Link>
                 <Link to="/messages" onClick={() => setMobileOpen(false)} className="text-sm font-medium">
                   {t("nav.messages")}
                 </Link>

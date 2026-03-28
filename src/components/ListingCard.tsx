@@ -3,14 +3,18 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ImageOff, MapPin } from "lucide-react";
+import { ImageOff, MapPin, Heart } from "lucide-react";
+import { motion } from "framer-motion";
 import type { Listing } from "@/types/domain";
 
 interface ListingCardProps {
   listing: Listing;
+  isFavorite?: boolean;
+  onToggleFavorite?: (listing: Listing) => Promise<void> | void;
+  favoriteLoading?: boolean;
 }
 
-const ListingCard = ({ listing }: ListingCardProps) => {
+const ListingCard = ({ listing, isFavorite = false, onToggleFavorite, favoriteLoading = false }: ListingCardProps) => {
   const { t } = useTranslation();
   const [imgError, setImgError] = useState(false);
   const firstImage = listing.images && listing.images.length > 0 ? listing.images[0] : null;
@@ -26,9 +30,12 @@ const ListingCard = ({ listing }: ListingCardProps) => {
   const periodLabel = periodKey ? t(`listing.period.${periodKey}`, { defaultValue: periodKey }) : "";
 
   return (
-    <Link to={`/annonces/${listing.id}`}>
-      <Card className="group h-full overflow-hidden border-2 border-transparent transition-all hover:border-primary/20 hover:shadow-lg">
-        <div className="aspect-square overflow-hidden bg-muted">
+    <Link
+      to={`/annonces/${listing.id}`}
+      className="block h-full rounded-xl outline-none ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    >
+      <Card className="group relative h-full overflow-hidden rounded-xl border-2 border-transparent shadow-sm transition-all hover:border-primary/25 hover:shadow-md">
+        <div className="aspect-square overflow-hidden rounded-t-xl bg-muted">
           {showPhoto ? (
             <img
               src={firstImage!}
@@ -51,6 +58,23 @@ const ListingCard = ({ listing }: ListingCardProps) => {
             </div>
           )}
         </div>
+        {onToggleFavorite && (
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.9 }}
+            whileHover={{ scale: 1.06 }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void onToggleFavorite(listing);
+            }}
+            disabled={favoriteLoading}
+            className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full border bg-background/90 text-foreground shadow-sm backdrop-blur transition-colors hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label={isFavorite ? t("favorites.remove") : t("favorites.add")}
+          >
+            <Heart className={`h-4 w-4 ${isFavorite ? "fill-primary text-primary" : ""}`} />
+          </motion.button>
+        )}
         <CardContent className="p-4">
           <div className="mb-2 flex items-center gap-2">
             <Badge variant="secondary" className="text-xs">
@@ -59,8 +83,13 @@ const ListingCard = ({ listing }: ListingCardProps) => {
             {listing.listing_type === "location" && (
               <Badge variant="outline" className="text-xs">{t("listing.rent")}</Badge>
             )}
+            {listing.status !== "available" && (
+              <Badge variant={listing.status === "sold" ? "destructive" : "outline"} className="text-xs">
+                {t(`listing.status.${listing.status}`)}
+              </Badge>
+            )}
           </div>
-          <h3 className="font-heading font-bold leading-tight line-clamp-2">{listing.title}</h3>
+          <h3 className="font-heading text-base font-bold leading-snug line-clamp-2 md:text-[1.05rem]">{listing.title}</h3>
           <p className="mt-1 text-lg font-bold text-primary">
             {listing.price.toFixed(2)} €
             {listing.listing_type === "location" && listing.price_period && (

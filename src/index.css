@@ -22,7 +22,8 @@
     --secondary-foreground: 0 0% 100%;
 
     --muted: 40 25% 93%;
-    --muted-foreground: 20 10% 45%;
+    /* Lisibilité renforcée sur fond clair (texte secondaire) */
+    --muted-foreground: 20 12% 38%;
 
     --accent: 45 90% 55%;
     --accent-foreground: 20 25% 15%;
@@ -63,7 +64,7 @@
     --secondary-foreground: 0 0% 100%;
 
     --muted: 20 15% 20%;
-    --muted-foreground: 40 15% 60%;
+    --muted-foreground: 40 12% 68%;
 
     --accent: 45 90% 50%;
     --accent-foreground: 20 25% 10%;
@@ -92,6 +93,50 @@
   }
 
   body {
-    @apply bg-background text-foreground font-body;
+    @apply bg-background text-foreground font-body antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-heading text-balance;
+  }
+
+  /* Focus clavier : liens et champs natifs (les boutons shadcn gèrent déjà le focus) */
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+@layer components {
+  /* Lien « Aller au contenu » — masqué sauf au focus clavier */
+  .skip-to-main {
+    @apply sr-only;
+  }
+  .skip-to-main:focus {
+    position: fixed;
+    left: 1rem;
+    top: 1rem;
+    z-index: 100;
+    width: auto;
+    height: auto;
+    padding: 0.5rem 1rem;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+    @apply rounded-md bg-primary font-medium text-primary-foreground shadow-md outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
   }
 }

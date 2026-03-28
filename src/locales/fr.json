@@ -1,8 +1,13 @@
 {
+  "a11y": {
+    "skipToContent": "Aller au contenu principal"
+  },
   "common": {
     "error": "Erreur",
     "loading": "Chargement…",
-    "brand": "TrocSpot"
+    "brand": "TrocSpot",
+    "retry": "Réessayer",
+    "apiUnreachable": "Impossible de contacter le serveur. Vérifiez que l’API est démarrée (npm run dev:all)."
   },
   "titles": {
     "home": "Accueil",
@@ -10,6 +15,8 @@
     "auth": "Connexion",
     "messages": "Messages",
     "account": "Mon compte",
+    "favorites": "Mes favoris",
+    "seller": "Vendeur",
     "legal": "Mentions légales",
     "privacy": "Confidentialité"
   },
@@ -17,17 +24,39 @@
     "browse": "Parcourir",
     "login": "Connexion",
     "publish": "Publier une annonce",
+    "favorites": "Mes favoris",
     "messages": "Messages",
     "account": "Mon compte",
     "logout": "Déconnexion",
-    "language": "Langue"
+    "language": "Langue",
+    "menuOpen": "Ouvrir le menu",
+    "menuClose": "Fermer le menu"
   },
   "footer": {
     "listings": "Annonces",
     "login": "Connexion",
     "legal": "Mentions légales",
     "privacy": "Confidentialité",
-    "rights": "© {{year}} TrocSpot. Tous droits réservés."
+    "rights": "© {{year}} TrocSpot. Tous droits réservés.",
+    "navAria": "Liens du pied de page",
+    "trustSummary": "TrocSpot facilite la découverte du catalogue et l’échange avec la boutique via la messagerie. Les modalités (paiement, remise, garantie) se coordonnent directement avec le vendeur — gardez les mêmes précautions qu’entre particuliers."
+  },
+  "trust": {
+    "eyebrow": "Confiance & transparence",
+    "messaging": {
+      "title": "Messagerie intégrée",
+      "desc": "Discutez de votre commande dans l’application, sans afficher votre email sur les annonces."
+    },
+    "safety": {
+      "title": "Signalement",
+      "desc": "Vous pouvez signaler un contenu inapproprié ; les signalements peuvent être examinés par l’équipe."
+    },
+    "legal": {
+      "title": "Cadre & données",
+      "desc": "Accès aux mentions légales et à la politique de confidentialité pour comprendre le traitement des données."
+    },
+    "disclaimer": "Pour le détail sur vos données personnelles :",
+    "privacyLink": "politique de confidentialité"
   },
   "home": {
     "heroTitle1": "Découvrez le catalogue",
@@ -38,8 +67,10 @@
     "categoriesTitle": "Catégories",
     "recentTitle": "Annonces récentes",
     "seeAll": "Tout voir",
-    "emptyCatalog": "Aucune annonce pour le moment. Le catalogue est publié par l’administrateur.",
+    "emptyStateTitle": "Aucune annonce pour le moment",
+    "emptyCatalog": "Le catalogue est publié par l’administrateur. Revenez bientôt ou parcourez les catégories.",
     "devHint": "Astuce : pour charger des annonces d’exemple avec images (dossier <code>public/sample-listings/</code>), exécutez <code>npm run seed</code> dans <code>server</code> (compte démo demo@trocspot.local / demo12345), puis rechargez la page.",
+    "recentLoadError": "Les annonces récentes n’ont pas pu être chargées.",
     "cat": {
       "vetements": "Vêtements",
       "livres": "Livres",
@@ -74,6 +105,7 @@
     "typeAll": "Vente & location",
     "typeSale": "Vente",
     "typeRent": "Location",
+    "availableOnly": "Disponibles uniquement",
     "sort": "Trier",
     "sortRecent": "Plus récentes",
     "sortPriceAsc": "Prix croissant",
@@ -92,7 +124,8 @@
     "emptyDescDefault": "Le catalogue est géré par l’administrateur. En local, chargez les exemples de démonstration ou connectez-vous en tant qu’admin pour publier.",
     "publish": "Publier une annonce",
     "showAll": "Tout afficher",
-    "devHint": "Développement : pour remplir la liste avec des visuels d’exemple, exécutez <code>npm run seed</code> dans le dossier <code>server</code>, puis rechargez."
+    "devHint": "Développement : pour remplir la liste avec des visuels d’exemple, exécutez <code>npm run seed</code> dans le dossier <code>server</code>, puis rechargez.",
+    "loadError": "Impossible de charger les annonces. Vérifiez que l’API est démarrée."
   },
   "listing": {
     "categories": {
@@ -108,6 +141,11 @@
     },
     "rent": "Location",
     "sale": "Vente",
+    "status": {
+      "available": "Disponible",
+      "reserved": "Réservé",
+      "sold": "Vendu"
+    },
     "noPhoto": "Pas de photo",
     "imageUnavailable": "Image indisponible",
     "period": {
@@ -136,7 +174,9 @@
     "ownListing": "C’est votre annonce !",
     "toastRequestTitle": "Demande enregistrée",
     "toastRequestDesc": "Un message a été envoyé à la boutique. Vous pouvez préciser votre commande dans la conversation.",
-    "loadError": "Impossible d’ouvrir la conversation"
+    "loadError": "Impossible d’ouvrir la conversation",
+    "soldHint": "Cette annonce est marquée comme vendue et n'accepte plus de nouvelles demandes.",
+    "viewSellerPage": "Voir la page vendeur"
   },
   "messages": {
     "loginPrompt": "Connectez-vous pour voir vos messages.",
@@ -155,12 +195,27 @@
     "openOkDesc": "Vous pouvez écrire à la boutique ci-dessous.",
     "openFailTitle": "Impossible d’ouvrir la conversation",
     "openFailDesc": "Réessayez plus tard.",
+    "sendFailTitle": "Envoi impossible",
+    "sendFailDesc": "Le message n’a pas pu être envoyé. Réessayez.",
+    "loadConversationsError": "Impossible de charger les conversations.",
+    "loadMessagesError": "Impossible de charger les messages.",
     "generalThread": "Message général",
     "fallbackClient": "Client"
+  },
+  "favorites": {
+    "add": "Ajouter aux favoris",
+    "remove": "Retirer des favoris",
+    "pageTitle": "Mes favoris",
+    "intro": "Retrouvez ici les annonces que vous avez enregistrées. Un clic sur le cœur retire l’annonce de la liste.",
+    "emptyTitle": "Aucun favori pour l’instant",
+    "emptyDesc": "Parcourez les annonces et touchez le cœur pour les retrouver ici.",
+    "browseListings": "Parcourir les annonces",
+    "loadError": "Impossible de charger vos favoris"
   },
   "account": {
     "title": "Mon compte",
     "tabProfile": "Profil",
+    "tabActivity": "Activité",
     "tabNotif": "Notifications",
     "tabCatalog": "Catalogue (admin)",
     "profileTitle": "Mon profil",
@@ -189,14 +244,29 @@
     "emptyListings": "Aucune annonce publiée pour le moment.",
     "publish": "Publier une annonce",
     "editListingTitle": "Modifier",
-    "deleteListingTitle": "Supprimer"
+    "deleteListingTitle": "Supprimer",
+    "activityFavorites": "Favoris récents",
+    "activityFavoritesEmpty": "Aucun favori pour l’instant.",
+    "activitySeeAllFavorites": "Voir tous mes favoris",
+    "activityMessages": "Messages récents",
+    "activityMessagesEmpty": "Aucune conversation pour l’instant.",
+    "activitySeeAllMessages": "Ouvrir la messagerie"
   },
   "notifications": {
     "title": "Notifications",
     "markAll": "Tout lu",
     "empty": "Aucune notification pour le moment.",
     "prefsLink": "Préférences de notification",
-    "aria": "Notifications"
+    "aria": "Notifications",
+    "ariaWithCount": "Notifications — {{count}} non lue(s)",
+    "loadError": "Impossible de charger les notifications.",
+    "actionFail": "Action impossible. Réessayez.",
+    "disclaimer": "Les notifications liées aux messages sont créées lorsqu’un message arrive. L’affichage se met à jour automatiquement (environ toutes les 12 s) : ce n’est pas instantané comme une messagerie temps réel.",
+    "newBannerTitle": "Nouvelles notifications",
+    "newBannerDesc": "+{{delta}} nouvelle(s) · {{total}} non lue(s) au total",
+    "typeLabel": {
+      "message": "Message"
+    }
   },
   "theme": {
     "label": "Thème d’affichage",

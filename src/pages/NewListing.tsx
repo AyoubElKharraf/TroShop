@@ -26,6 +26,7 @@ const NewListing = () => {
     price: "",
     price_period: "jour",
     condition: "bon",
+    status: "available",
     location: "",
   });
   const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -84,6 +85,7 @@ const NewListing = () => {
         fd.append("price_period", form.price_period);
       }
       fd.append("condition", form.condition);
+      fd.append("status", form.status);
       if (form.location) fd.append("location", form.location);
       imageFiles.forEach((file) => fd.append("images", file));
 
@@ -180,6 +182,18 @@ const NewListing = () => {
                 <Label>Localisation</Label>
                 <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Paris, Lyon..." />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Statut</Label>
+              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="available">Disponible</SelectItem>
+                  <SelectItem value="reserved">Réservé</SelectItem>
+                  <SelectItem value="sold">Vendu</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Images */}

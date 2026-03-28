@@ -3,9 +3,9 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search, Shirt, BookOpen, Cpu, ArrowRight } from "lucide-react";
+import { Search, Shirt, BookOpen, Cpu, ArrowRight, AlertCircle, Package } from "lucide-react";
 import { motion } from "framer-motion";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { Listing, ListingsPageResponse } from "@/types/domain";
 import { useState } from "react";
@@ -13,6 +13,9 @@ import { useNavigate } from "react-router-dom";
 import ListingCard from "@/components/ListingCard";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useAuth } from "@/contexts/AuthContext";
+import { TrustStrip } from "@/components/TrustStrip";
+import { EmptyState } from "@/components/EmptyState";
+import { ListingCardSkeleton } from "@/components/ListingCardSkeleton";
 
 const categories = [
   { key: "vetements", icon: Shirt, color: "bg-primary/10 text-primary" },
@@ -24,15 +27,45 @@ const Index = () => {
   const { t } = useTranslation();
   usePageTitle(t("titles.home"));
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [favoriteBusyId, setFavoriteBusyId] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const { data: recentData } = useQuery({
-    queryKey: ["recent-listings"],
-    queryFn: async () =>
-      api<ListingsPageResponse>("/api/listings?page=1&pageSize=8&sort=recent"),
-  });
+  const { data: recentData, isLoading: recentLoading, isError: recentError, error: recentErr, refetch: refetchRecent } =
+    useQuery({
+      queryKey: ["recent-listings"],
+      queryFn: async () =>
+        api<ListingsPageResponse>("/api/listings?page=1&pageSize=8&sort=recent"),
+    });
   const recentListings: Listing[] | undefined = recentData?.items;
+  const recentErrorMessage = recentErr instanceof Error ? recentErr.message : String(recentErr ?? "");
+
+  const { data: favoriteIds = [] } = useQuery({
+    queryKey: ["favorite-ids", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const res = await api<{ ids: string[] }>("/api/me/favorites/ids");
+      return res.ids || [];
+    },
+  });
+
+  const favoriteSet = new Set(favoriteIds);
+
+  const toggleFavorite = async (listingId: string) => {
+    if (!user) return;
+    setFavoriteBusyId(listingId);
+    try {
+      if (favoriteSet.has(listingId)) {
+        await api(`/api/listings/${listingId}/favorite`, { method: "DELETE" });
+      } else {
+        await api(`/api/listings/${listingId}/favorite`, { method: "POST" });
+      }
+      await queryClient.invalidateQueries({ queryKey: ["favorite-ids", user.id] });
+    } finally {
+      setFavoriteBusyId(null);
+    }
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,6 +116,8 @@ const Index = () => {
         </div>
       </section>
 
+      <TrustStrip />
+
       <section className="container py-12">
         <h2 className="mb-6 font-heading text-2xl font-bold">{t("home.categoriesTitle")}</h2>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -113,26 +148,65 @@ const Index = () => {
             </Button>
           </Link>
         </div>
-        {recentListings && recentListings.length > 0 ? (
+        {recentError ? (
+          <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-8">
+            <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+                <AlertCircle className="h-6 w-6" />
+              </div>
+              <div className="min-w-0 flex-1 space-y-1">
+                <p className="font-heading font-semibold">{t("home.recentLoadError")}</p>
+                <p className="text-sm text-muted-foreground">{recentErrorMessage}</p>
+              </div>
+              <Button type="button" variant="outline" onClick={() => void refetchRecent()} className="shrink-0">
+                {t("common.retry")}
+              </Button>
+            </div>
+          </div>
+        ) : recentLoading && !recentData ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {recentListings.map((listing) => (
-              <ListingCard key={listing.id} listing={listing} />
+            {Array.from({ length: 4 }).map((_, i) => (
+              <ListingCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : recentListings && recentListings.length > 0 ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {recentListings.map((listing, idx) => (
+              <motion.div
+                key={listing.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: 0.05 + Math.min(idx * 0.03, 0.16) }}
+              >
+                <ListingCard
+                  listing={listing}
+                  isFavorite={favoriteSet.has(listing.id)}
+                  onToggleFavorite={user ? async (l) => toggleFavorite(l.id) : undefined}
+                  favoriteLoading={favoriteBusyId === listing.id}
+                />
+              </motion.div>
             ))}
           </div>
         ) : (
-          <div className="rounded-xl border-2 border-dashed p-12 text-center">
-            <p className="text-muted-foreground">{t("home.emptyCatalog")}</p>
+          <>
+            <EmptyState
+              icon={Package}
+              title={t("home.emptyStateTitle")}
+              description={t("home.emptyCatalog")}
+              showCatalogIllustration
+            >
+              {user?.role === "admin" && (
+                <Button asChild className="font-heading font-semibold">
+                  <Link to="/annonces/nouvelle">{t("nav.publish")}</Link>
+                </Button>
+              )}
+            </EmptyState>
             {import.meta.env.DEV && (
-              <p className="mx-auto mt-4 max-w-xl text-xs leading-relaxed text-muted-foreground">
+              <p className="mx-auto mt-6 max-w-xl text-center text-xs leading-relaxed text-muted-foreground">
                 {t("home.devHint")}
               </p>
             )}
-            {user?.role === "admin" && (
-              <Link to="/annonces/nouvelle">
-                <Button className="mt-4 font-heading font-semibold">{t("nav.publish")}</Button>
-              </Link>
-            )}
-          </div>
+          </>
         )}
       </section>
     </>

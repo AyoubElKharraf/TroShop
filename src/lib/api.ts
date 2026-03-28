@@ -1,5 +1,16 @@
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
+/** Erreur HTTP ou réseau renvoyée par `api()` — `status` 0 = pas de réponse serveur (réseau / CORS). */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 export function getToken(): string | null {
   return localStorage.getItem("auth_token");
 }
@@ -20,14 +31,22 @@ export async function api<T = unknown>(
   if (!isForm && options.body != null && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  } catch {
+    throw new ApiError(
+      "Impossible de joindre le serveur. Vérifiez que l’API est démarrée (npm run dev:all).",
+      0
+    );
+  }
   if (res.status === 204) return undefined as T;
   const text = await res.text();
   let data: unknown = null;
   try {
     data = text ? JSON.parse(text) : null;
   } catch {
-    if (!res.ok) throw new Error(res.statusText);
+    if (!res.ok) throw new ApiError(res.statusText || "Erreur", res.status);
   }
   if (!res.ok) {
     const o = data as { error?: string; message?: string } | null;
@@ -35,7 +54,7 @@ export async function api<T = unknown>(
     if (res.status === 429) {
       msg = typeof msg === "string" ? msg : "Trop de requêtes. Patientez un instant.";
     }
-    throw new Error(typeof msg === "string" ? msg : "Erreur réseau");
+    throw new ApiError(typeof msg === "string" ? msg : "Erreur", res.status);
   }
   return data as T;
 }

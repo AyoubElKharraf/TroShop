@@ -36,6 +36,7 @@ CREATE TABLE listings (
   location VARCHAR(255),
   images JSON,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
+  status ENUM('available', 'reserved', 'sold') NOT NULL DEFAULT 'available',
   is_contact_hub TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
@@ -43,7 +44,8 @@ CREATE TABLE listings (
   INDEX idx_listings_category (category),
   INDEX idx_listings_type (listing_type),
   INDEX idx_listings_user (user_id),
-  INDEX idx_listings_active (is_active)
+  INDEX idx_listings_active (is_active),
+  INDEX idx_listings_status (status)
 );
 
 CREATE TABLE conversations (
@@ -51,6 +53,8 @@ CREATE TABLE conversations (
   listing_id CHAR(36) NOT NULL,
   buyer_id CHAR(36) NOT NULL,
   seller_id CHAR(36) NOT NULL,
+  buyer_last_read_at TIMESTAMP(3) NULL DEFAULT NULL,
+  seller_last_read_at TIMESTAMP(3) NULL DEFAULT NULL,
   created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uq_listing_buyer (listing_id, buyer_id),
@@ -90,6 +94,16 @@ CREATE TABLE listing_reports (
   UNIQUE KEY uq_listing_reporter (listing_id, reporter_id),
   CONSTRAINT fk_report_listing FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE,
   CONSTRAINT fk_report_reporter FOREIGN KEY (reporter_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE favorites (
+  user_id CHAR(36) NOT NULL,
+  listing_id CHAR(36) NOT NULL,
+  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (user_id, listing_id),
+  INDEX idx_favorites_listing (listing_id),
+  CONSTRAINT fk_favorites_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_favorites_listing FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE
 );
 
 CREATE TABLE notifications (
