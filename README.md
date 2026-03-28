@@ -1,11 +1,11 @@
 # TrocSpot (E-Commerce Shop)
 
-[![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?logo=github)](https://github.com/AyoubElKharraf/E-Commerce-Shop)
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?logo=github)](https://github.com/AyoubElKharraf/TroShop)
 
 **TrocSpot** est une application web **full stack** : un **catalogue d’annonces** publié par une **boutique (admin)**, des **visiteurs** qui parcourent, **mettent en favori**, **contactent la boutique** via la **messagerie**, et reçoivent des **notifications** dans l’application.  
 Interface en **français** et **anglais**, thème **clair / sombre / système**, PWA légère (`manifest`).
 
-**Dépôt :** [github.com/AyoubElKharraf/E-Commerce-Shop](https://github.com/AyoubElKharraf/E-Commerce-Shop)
+**Dépôt :** [github.com/AyoubElKharraf/TroShop](https://github.com/AyoubElKharraf/TroShop)
 
 ---
 
@@ -111,8 +111,8 @@ Navigateur
 ### 1. Cloner et installer les dépendances
 
 ```bash
-git clone https://github.com/AyoubElKharraf/E-Commerce-Shop.git
-cd E-Commerce-Shop
+git clone https://github.com/AyoubElKharraf/TroShop.git
+cd TroShop
 npm install
 cd server && npm install && cd ..
 ```
